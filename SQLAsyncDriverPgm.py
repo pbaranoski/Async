@@ -6,6 +6,7 @@ from threading import Thread
 
 import SQLTeraDataFncts
 
+import pandas as pd
 import time
 import os
 import sys
@@ -19,7 +20,7 @@ MAX_NOF_ACTIVE_THREADS = 15
 CHUNK_SIZE_NOF_ROWS = 10000
 
 sThreadRCMsgs = []
-TotRows = []
+#TotRows = []
 
 ###############################
 # Create log path+filename
@@ -36,7 +37,7 @@ if not os.path.exists(data_dir):
 mainLogfile = os.path.join(log_dir,"geoMainProcess.log")
 
 logging.basicConfig(
-    format="%(asctime)s %(levelname)-8s %(threadName)-12s %(funcName)-20s %(message)s",
+    format="%(asctime)s %(levelname)-8s %(threadName)-12s %(funcName)-22s %(message)s",
     encoding='utf-8', datefmt="%Y-%m-%d %H:%M:%S", 
     handlers=[
     logging.FileHandler(mainLogfile),
@@ -67,7 +68,7 @@ SqlStmtGeo1 = """
         IDR_INSRT_TS, IDR_UPDT_TS
     FROM CMS_VIEW_GEO_CDEV.V1_GEO_ADR
     WHERE GEO_USPS_STATE_CD = 'MD'
-  ;
+ ;
 """
 #     AND GEO_ZIP5_CD = '21204'
 ##    AND GEO_ZIP5_CD = '21236'
@@ -85,9 +86,30 @@ SqlInsert = """
     Values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
     """
 
+# Don't forget to update IDR_UPDT_TS
+SqlUpdate = """
+        UPDATE CMS_WORK_COMM_CDEV.GEOCODE_ADRRESS_BLK_INSRT
+        SET GEO_ADR_GIS_LON_QTY = ?
+           ,GEO_ADR_GIS_LAT_QTY = ?
+           ,GEO_ADR_GIS_MATCH_SCRE_NUM = ?
+           ,GEO_ADR_GIS_MATCH_ADR = ?
+           ,GEO_ADR_GIS_ADR_RULE_CD = ?
+           ,IDR_UPDT_TS = CURRENT_TIMESTAMP(0)
+        WHERE ADR_FULL = ? 
+        AND ADD_GEO_SK = ?
+        AND POSTAL_CD = ?
+        AND POSTAL_EXT = ?
+        AND CITY_NAME = ?
+        AND USPS_STATE_CD = ? 
+"""
+
+#CURRENT_TIMESTAMP (format 'YYYY-MM-DDbHH:MI:SS')
+# '2022-03-01 12:59:00'
+
 SqlDelete = """
     DELETE FROM CMS_WORK_COMM_CDEV.GEOCODE_ADRRESS_BLK_INSRT
 """
+
 ###############################
 # functions
 ###############################
@@ -109,20 +131,6 @@ def geoCodeThreadProcess(ThreadNum, rows):
         RC = 0
 
         ###########################################
-        # Create logger for thread
-        ###########################################
-        """
-        threadLogfile = os.path.join(log_dir,f"GeoThread_{ThreadNum}.log")
-        
-        threadLogger = logging.getLogger(f"GeoThread_{ThreadNum}") 
-        threadLogger.setLevel(logging.INFO)
-        fh = logging.FileHandler(threadLogfile, "w", encoding='utf-8')
-        formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(funcName)-12s %(message)s")
-        
-        fh.setFormatter(formatter)
-        threadLogger.addHandler(fh)
-        """
-        ###########################################
         # Start main thread processing
         ###########################################
         rootLogger.info(f"Thread {ThreadNum} - Started at "+getDateTime())
@@ -139,13 +147,38 @@ def geoCodeThreadProcess(ThreadNum, rows):
         rootLogger.info(f"Thread {ThreadNum} - Converting results-set to csv file")
 
         csvFile = os.path.join(data_dir,f"resultsSet_{ThreadNum}.csv")
+        #pdCSVFile = os.path.join(data_dir,f"pandasSet_{ThreadNum}.csv")
         SQLTeraDataFncts.createCSVFile(csvFile, sCursorColNames, rows, ",")
 
-        ###########################################
-        # Geocode results-set
-        ###########################################
+        ##############################################
+        # Call ArcGIS function to Geocode results-set
+        ##############################################
         rootLogger.info(f"Thread {ThreadNum} - Calling geocoding module")
         time.sleep(3)
+
+        ##############################################
+        # Format CSV file into correct order of fields   
+        # needed for Update SQL statement.
+        ##############################################
+        df = pd.read_csv(csvFile)
+        #rootLogger.debug(pd)
+        
+        # Include ONLY required columns for SQL statement.
+        df = df[['GEO_ADR_GIS_LON_QTY', 'GEO_ADR_GIS_LAT_QTY', 'GEO_ADR_GIS_MATCH_SCRE_NUM', 
+            'GEO_ADR_GIS_MATCH_ADR','GEO_ADR_GIS_ADR_RULE_CD',
+            'GEO_ADR_FULL_ADR', 'GEO_SK', 'GEO_ZIP5_CD', 'GEO_ZIP4_CD',
+            'GEO_ADR_CITY_NAME', 'GEO_USPS_STATE_CD']]
+
+        # Place columns in proper order
+        dfReorderedCols = df.reindex(columns= ['GEO_ADR_GIS_LON_QTY', 'GEO_ADR_GIS_LAT_QTY', 
+                                               'GEO_ADR_GIS_MATCH_SCRE_NUM', 
+                                               'GEO_ADR_GIS_MATCH_ADR','GEO_ADR_GIS_ADR_RULE_CD', 
+                                               'GEO_ADR_FULL_ADR', 'GEO_SK', 'GEO_ZIP5_CD', 'GEO_ZIP4_CD',
+                                               'GEO_ADR_CITY_NAME', 'GEO_USPS_STATE_CD'])
+                                              
+
+        #rootLogger.debug(dfReorderedCols)
+        dfReorderedCols.to_csv(csvFile, index=False)
 
         #########################################
         # Perform bulk insert into DB.
@@ -157,7 +190,8 @@ def geoCodeThreadProcess(ThreadNum, rows):
             raise SQLTeraDataFncts.NullConnectException(f"Thread {ThreadNum} could not connect to DB.")    
 
         #SQLTeraDataFncts.bulkInsertTDReadCSV(cnx, csvFile, SqlInsert)
-        SQLTeraDataFncts.bulkInsertCSVReader(cnx, csvFile, SqlInsert, True)
+        #SQLTeraDataFncts.bulkInsrtUpdtCSVReader(cnx, csvFile, SqlInsert, True)
+        SQLTeraDataFncts.bulkInsrtUpdtCSVReader(cnx, csvFile, SqlUpdate, True)
 
         ##############################################
         # Thread clean-up: 1) Close DB connection
@@ -167,7 +201,6 @@ def geoCodeThreadProcess(ThreadNum, rows):
 
         rootLogger.info(f"Thread {ThreadNum} - Thread clean-up.")
         os.remove(csvFile)
-
 
         ###########################################
         # End main thread processing
@@ -203,7 +236,7 @@ def main():
     rootLogger.info("\n##########################")
     rootLogger.info("Start function main")
 
-    SQLTeraDataFncts.DeleteRows(SqlDelete, None)
+    #SQLTeraDataFncts.DeleteRows(SqlDelete, None)
 
     ###################################################
     # get DB cursor

@@ -337,10 +337,9 @@ def DeleteRows(sqlStmt, tupParms):
 
 
 def insertRow(cnx, sqlStmt, tupParms):
-    #########################################################################################
-    # MySQL does not have a way to execute an INSERT statement directly from the connection
-    # object
-    #########################################################################################
+    ##########################################################
+    #
+    ##########################################################
     logger.debug("start function insertRow()")
 
     try:
@@ -495,7 +494,7 @@ def bulkInsertTDFastLoad(cnx, sSQLInsert, lstParms):
         raise
 
 
-def unquoteNoneNullValues(row): 
+def convertNoValue2NullValue(row):
     ############################################
     # convert empty string to "None"
     ############################################
@@ -505,42 +504,39 @@ def unquoteNoneNullValues(row):
     return row     
 
 
-def bulkInsertCSVReader(cnx, sFilename, sSQLInsert, bHeader):
+def bulkInsrtUpdtCSVReader(cnx, sFilename, sSQLInsert, bHeader):
     ##############################################
     # sFilename = csv file
     ##############################################
-    logger.info("start function bulkInsertCSVReader()")
+    logger.info("start function bulkInsrtUpdtCSVReader()")
 
     try:
 
         with open(sFilename, 'r', newline='') as csvfile:
             with cnx.cursor () as cur:
 
-                # NOTE: csv.reader is:
-                # 1) converting empty value to a empty string instead of Python None/Null
-                # 2) converting None in file to string 'None'
-                # NOTE: This causes problem when inserting/updating a timestamp column (UPDT_TS)
+                ######################################################################################
+                # NOTE: csv.reader converts empty value to an empty string instead of Python None/Null
+                # NOTE: This causes problem when inserting/updating a timestamp column (i.e., UPDT_TS)
                 #  where a string is not a valid timestamp value. 
-                # NOTE: Need to have "None" in csv file where values to insert are NULL.
+                # NOTE: Need to have keyword None in csv file where values to insert are NULL.
+                ######################################################################################
 
                 csv_reader = csv.reader(csvfile,quoting=csv.QUOTE_MINIMAL)
                 if bHeader:
                     next(csv_reader)
 
-                cur.execute (sSQLInsert, [ unquoteNoneNullValues(row) for row in csv_reader] )
+                cur.execute (sSQLInsert, [ convertNoValue2NullValue(row) for row in csv_reader] )
                 #cur.execute(sSQLInsert, Parms)
+                
+                cnx.commit()
 
-        logger.info("rows inserted!")   
+        logger.info("rows inserted/updated!")   
 
     except Exception as e:
-        logger.error("Error in function bulkInsertCSVReader: "+sSQLInsert) 
+        logger.error("Error in function bulkInsrtUpdtCSVReader: "+sSQLInsert) 
         logger.error("csv filename: "+sFilename)
         logger.error(e)
-
-        #sRequest = "{fn teradata_nativesql}{fn teradata_get_errors}" + sSQLInsert
-        #cnx.cursor().execute (sRequest)
-        #for row in cur.fetchall(): 
-        #    logger.error(row)
 
         raise
 
