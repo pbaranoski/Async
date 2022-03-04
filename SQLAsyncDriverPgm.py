@@ -4,6 +4,8 @@
 #
 from threading import Thread
 
+from numpy import dtype
+
 import SQLTeraDataFncts
 
 import pandas as pd
@@ -72,8 +74,9 @@ SqlStmtGeo1 = """
 """
 #     AND GEO_ZIP5_CD = '21204'
 ##    AND GEO_ZIP5_CD = '21236'
-#     AND GEO_ADR_LINE_1_ADR like '%BELAIR RD%'
-#   AND GEO_ADR_LINE_1_ADR like '9657 BELAIR RD UNIT 1474%'
+#       AND IDR_UPDT_TS is NULL
+#    AND GEO_ADR_FULL_ADR = '1441 N ROLLING ROAD' AND GEO_ZIP5_CD = '00000'
+#    AND GEO_ADR_FULL_ADR = '8139 RITCHIE HWY' AND GEO_ADR_CITY_NAME = 'NA'
 
 SqlInsert = """
         INSERT INTO CMS_WORK_COMM_CDEV.GEOCODE_ADRRESS_BLK_INSRT (
@@ -156,11 +159,13 @@ def geoCodeThreadProcess(ThreadNum, rows):
         rootLogger.info(f"Thread {ThreadNum} - Calling geocoding module")
         time.sleep(3)
 
-        ##############################################
+        ####################################################################
         # Format CSV file into correct order of fields   
         # needed for Update SQL statement.
-        ##############################################
-        df = pd.read_csv(csvFile)
+        # NOTE: dtype=str --> prevents zip-code '00000' from being read and 
+        #       written as '0'.
+        ####################################################################
+        df = pd.read_csv(csvFile, dtype=str, keep_default_na=False)
         #rootLogger.debug(pd)
         
         # Include ONLY required columns for SQL statement.
@@ -178,6 +183,10 @@ def geoCodeThreadProcess(ThreadNum, rows):
                                               
 
         #rootLogger.debug(dfReorderedCols)
+        ############################################################
+        # NOTE: keep_default_na prevents 'NA' string from being
+        #       from being converted to null value.
+        ############################################################       
         dfReorderedCols.to_csv(csvFile, index=False)
 
         #########################################

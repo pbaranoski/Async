@@ -5,22 +5,21 @@
 #
 
 import teradatasql
+
+#from sqlalchemy import create_engine
+##from dbmodule import connect
+
 #pip install sqlalchemy-teradata (must be present on system to use sqlalchemy with teradata)
 # NOTE: Alchemy appears to use ODBC connections to database. Need 64-bit ODBC teradata driver to use
 #       with pandas. Can only find 32-bit drivers, and that is all that is installed on my machine.
 # pyodbc python package - generic database package. Need ODBC 64-bit driver
 #import teradataml (FYI)
 
-#import datetime
-import logging
 import os
 import csv
-import re
+import logging
+#from logging import NullHandler
 
-from sqlalchemy import create_engine
-#from dbmodule import connect
-
-from logging import NullHandler
 
 class NullConnectException(Exception):
     "Connection object is null"
@@ -111,7 +110,7 @@ def getConnection():
 
     return cnx
 
-
+"""
 def getConnectionEngine():
     ##################################
     # need 64-bit ODBC driver for this
@@ -144,7 +143,7 @@ def getConnectionEngine():
         raise
 
     return eng
-
+"""
 
 def getAllRows(sqlStmt, tupParms):
     ########################################################
@@ -411,14 +410,16 @@ def loadCursorColumnList(cursorDescription):
 
 
 def createCSVFile(sFilename, header, rows, cDelim):
-    ############################
+    ####################################################################
     # Rows = results-set
-    ############################
+    # NOTE: QUOTE_ALL --> so that zip_code '00000' can be treated as 
+    #       string and not integer
+    ####################################################################
     logger.debug("start function createCSVFile()")
 
     with open(sFilename, 'w', newline='', encoding="utf-8") as csvfile:
         filewriter = csv.writer(csvfile, delimiter=cDelim,
-                                quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                                quotechar='"', quoting=csv.QUOTE_ALL)
         if header != None:                        
             filewriter.writerow(header)
         filewriter.writerows(rows)
