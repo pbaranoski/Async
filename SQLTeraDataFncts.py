@@ -62,11 +62,8 @@ logger = logging.getLogger()
 ##########################################
 # TeraData Connection string values
 ##########################################
-#td_username = 'IDRC_BEPSD_ETL_DEV'
-#td_password = 't#9LBL717Dd7#Xd'
-#td_hostx = "dd-proxy.biaaws.local"
-td_username = 'BZH3'
-td_password = 'trbf0f0F'
+td_username = 'XXXX'
+td_password = 'xxxxxxx'
 td_database = "DBC"
 #td_hostx = "pz-nlb-common-in-thk-55ee045e137bee2c.elb.us-east-1.amazonaws.com"
 td_hostx = "dz-nlb-common-in-thk-14c6b2e1d1e98dcc.elb.us-east-1.amazonaws.com"
